@@ -4,7 +4,6 @@ import { useState } from 'react';
 export default function Home() {
   const [loading, setLoading] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [rawOutputLog, setRawOutputLog] = useState(''); // Backup log to view raw response
   
   const [mapData, setMapData] = useState({
     acqComp: '', acqAsst: '', acqAct: '', acqRes: '',
@@ -21,46 +20,6 @@ export default function Home() {
   const [performanceStandard, setPerformanceStandard] = useState('');
   const [coreValues, setCoreValues] = useState('God Fearing, Respectfulness, Initiative, Love of Nature, Leadership');
 
-  // Bulletproof RegEx-based extractor that ignores case, brackets, and symbol layout discrepancies
-  const regexExtract = (text: string, sectionKey: string): string => {
-    // Looks for patterns like: [ACQUISITION_COMPETENCIES], ACQUISITION COMPETENCIES:, **Acquisition Competencies**
-    const boundaryPatterns: { [key: string]: RegExp } = {
-      acqComp: /(?:\[?ACQUISITION[-_\s]COMPETENCIES\]?|ACQUISITION COMPETENCIES)[:\s\n]*/i,
-      acqAsst: /(?:\[?ACQUISITION[-_\s]ASSESSMENTS\]?|ACQUISITION ASSESSMENTS)[:\s\n]*/i,
-      acqAct: /(?:\[?ACQUISITION[-_\s]ACTIVITIES\]?|ACQUISITION ACTIVITIES)[:\s\n]*/i,
-      acqRes: /(?:\[?ACQUISITION[-_\s]RESOURCES\]?|ACQUISITION RESOURCES)[:\s\n]*/i,
-      mmComp: /(?:\[?(?:MAKE[-_\s]?)?MEANING[-_\s]COMPETENCIES\]?|(?:MAKE\s)?MEANING COMPETENCIES)[:\s\n]*/i,
-      mmAsst: /(?:\[?(?:MAKE[-_\s]?)?MEANING[-_\s]ASSESSMENTS\]?|(?:MAKE\s)?MEANING ASSESSMENTS)[:\s\n]*/i,
-      mmAct: /(?:\[?(?:MAKE[-_\s]?)?MEANING[-_\s]ACTIVITIES\]?|(?:MAKE\s)?MEANING ACTIVITIES)[:\s\n]*/i,
-      mmRes: /(?:\[?(?:MAKE[-_\s]?)?MEANING[-_\s]RESOURCES\]?|(?:MAKE\s)?MEANING RESOURCES)[:\s\n]*/i,
-      transComp: /(?:\[?TRANSFER[-_\s]COMPETENCIES\]?|TRANSFER COMPETENCIES)[:\s\n]*/i,
-      transAsst: /(?:\[?TRANSFER[-_\s]ASSESSMENTS\]?|TRANSFER ASSESSMENTS)[:\s\n]*/i,
-      transAct: /(?:\[?TRANSFER[-_\s]ACTIVITIES\]?|TRANSFER ACTIVITIES)[:\s\n]*/i,
-      transRes: /(?:\[?TRANSFER[-_\s]RESOURCES\]?|TRANSFER RESOURCES)[:\s\n]*/i,
-    };
-
-    const currentRegex = boundaryPatterns[sectionKey];
-    const match = text.match(currentRegex);
-    if (!match || match.index === undefined) return '';
-
-    const startPos = match.index + match[0].length;
-    
-    // Find where the NEXT section header starts to clip the text cleanly
-    let endPos = text.length;
-    Object.keys(boundaryPatterns).forEach((key) => {
-      if (key !== sectionKey) {
-        const nextMatch = text.match(boundaryPatterns[key]);
-        if (nextMatch && nextMatch.index !== undefined && nextMatch.index > match.index!) {
-          if (nextMatch.index < endPos) {
-            endPos = nextMatch.index;
-          }
-        }
-      }
-    });
-
-    return text.substring(startPos, endPos).trim();
-  };
-
   const handleMapGeneration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject || !grade || !competencies || !topics || !contentStandard || !performanceStandard) {
@@ -69,7 +28,6 @@ export default function Home() {
 
     setLoading(true);
     setHasGenerated(false);
-    setRawOutputLog('');
 
     try {
       const res = await fetch('/api/generate', {
@@ -83,54 +41,63 @@ export default function Home() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let done = false;
-      let rawText = '';
+      let textBuffer = '';
 
       while (!done) {
         const { value, done: readingDone } = await reader.read();
         done = readingDone;
         if (value) {
-          rawText += decoder.decode(value, { stream: !done });
+          textBuffer += decoder.decode(value, { stream: !done });
         }
       }
 
-      setRawOutputLog(rawText);
+      // 1. Remove markdown code block flags if present
+      let cleanJsonText = textBuffer
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
 
-      // Extract each field with the case-insensitive RegEx finder
-      const acqComp = regexExtract(rawText, 'acqComp');
-      const acqAsst = regexExtract(rawText, 'acqAsst');
-      const acqAct = regexExtract(rawText, 'acqAct');
-      const acqRes = regexExtract(rawText, 'acqRes');
+      // 2. Escape raw control character linebreaks that break string values inside JSON
+      cleanJsonText = cleanJsonText.replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+      
+      // 3. Fix potential edge case accidental double escaping from the regex step
+      cleanJsonText = cleanJsonText.replace(/\\n\\n/g, "\\n").replace(/(?<="[^"]*)\\n(?=[^"]*")/g, " ");
 
-      const mmComp = regexExtract(rawText, 'mmComp');
-      const mmAsst = regexExtract(rawText, 'mmAsst');
-      const mmAct = regexExtract(rawText, 'mmAct');
-      const mmRes = regexExtract(rawText, 'mmRes');
-
-      const transComp = regexExtract(rawText, 'transComp');
-      const transAsst = regexExtract(rawText, 'transAsst');
-      const transAct = regexExtract(rawText, 'transAct');
-      const transRes = regexExtract(rawText, 'transRes');
-
+      // Try extraction parsing safely
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanJsonText);
+      } catch (jsonErr) {
+        // Fallback recovery if there's an aggressive hanging bracket issue
+        const openingBrace = cleanJsonText.indexOf('{');
+        const closingBrace = cleanJsonText.lastIndexOf('}');
+        if (openingBrace !== -1 && closingBrace !== -1) {
+          parsed = JSON.parse(cleanJsonText.substring(openingBrace, closingBrace + 1));
+        } else {
+          throw jsonErr;
+        }
+      }
+      
       setMapData({
-        acqComp: acqComp || 'Processing complete layout assignment...',
-        acqAsst: acqAsst || 'Generating assessments alignment...',
-        acqAct: acqAct || 'Structuring customized tasks...',
-        acqRes: acqRes || 'Locating materials references...',
-        mmComp: mmComp || 'Organizing meaning alignments...',
-        mmAsst: mmAsst || 'Constructing analytical checks...',
-        mmAct: mmAct || 'Weaving institutional connections...',
-        mmRes: mmRes || 'Preparing analytical tools...',
-        transComp: transComp || 'Arranging production vectors...',
-        transAsst: transAsst || 'Drafting capstone metrics...',
-        transAct: transAct || 'Developing implementation setups...',
-        transRes: transRes || 'Assembling framework criteria...'
+        acqComp: parsed.acqComp?.replace(/\\n/g, '\n') || '',
+        acqAsst: parsed.acqAsst?.replace(/\\n/g, '\n') || '',
+        acqAct: parsed.acqAct?.replace(/\\n/g, '\n') || '',
+        acqRes: parsed.acqRes?.replace(/\\n/g, '\n') || '',
+        mmComp: parsed.mmComp?.replace(/\\n/g, '\n') || '',
+        mmAsst: parsed.mmAsst?.replace(/\\n/g, '\n') || '',
+        mmAct: parsed.mmAct?.replace(/\\n/g, '\n') || '',
+        mmRes: parsed.mmRes?.replace(/\\n/g, '\n') || '',
+        transComp: parsed.transComp?.replace(/\\n/g, '\n') || '',
+        transAsst: parsed.transAsst?.replace(/\\n/g, '\n') || '',
+        transAct: parsed.transAct?.replace(/\\n/g, '\n') || '',
+        transRes: parsed.transRes?.replace(/\\n/g, '\n') || ''
       });
       
       setHasGenerated(true);
 
     } catch (error) {
-      console.error(error);
-      alert("System processing timeout or streaming interruption occurred.");
+      console.error("Parsing mapping error:", error);
+      alert("Encountered formatting mismatch. Please click generate again to re-sync structural blocks.");
     } finally {
       setLoading(false);
     }
@@ -162,22 +129,22 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Content Standard</label>
-                <textarea rows={2} placeholder="Paste content standard..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={contentStandard} onChange={e => setContentStandard(e.target.value)} />
+                <textarea rows={4} placeholder="Paste content standard..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={contentStandard} onChange={e => setContentStandard(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Performance Standard</label>
-                <textarea rows={2} placeholder="Paste performance standard..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={performanceStandard} onChange={e => setPerformanceStandard(e.target.value)} />
+                <textarea rows={4} placeholder="Paste performance standard..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={performanceStandard} onChange={e => setPerformanceStandard(e.target.value)} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Learning Competencies</label>
-                <textarea rows={3} placeholder="Paste all competencies here..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={competencies} onChange={e => setCompetencies(e.target.value)} />
+                <textarea rows={4} placeholder="Paste all competencies here..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={competencies} onChange={e => setCompetencies(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Topic / Quarter</label>
-                <textarea rows={3} placeholder="e.g., First Quarter - Quadratic Equations..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={topics} onChange={e => setTopics(e.target.value)} />
+                <textarea rows={4} placeholder="e.g., Measurement and Geometry..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={topics} onChange={e => setTopics(e.target.value)} />
               </div>
             </div>
 
@@ -191,16 +158,6 @@ export default function Home() {
             </button>
           </form>
         </div>
-
-        {/* Safety Net: View Raw Log tool section if generation contains format exceptions */}
-        {rawOutputLog && (
-          <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-900 flex justify-between items-center">
-            <span>Data stream loaded successfully ({rawOutputLog.length} characters received).</span>
-            <button type="button" onClick={() => alert(rawOutputLog)} className="underline font-bold hover:text-amber-700 ml-2">
-              View Raw Generation Text
-            </button>
-          </div>
-        )}
 
         {/* Official Template Table Matrix Output */}
         {hasGenerated && (
@@ -228,7 +185,11 @@ export default function Home() {
                   {/* Row 1: ACQUISITION */}
                   <tr>
                     <td className="border-r border-slate-900 p-2 font-bold bg-slate-50 text-center">ACQUISITION</td>
-                    <td className="border-r border-slate-900 p-2 whitespace-pre-line" rowSpan={3}>{topics}<br/><br/>{contentStandard}</td>
+                    <td className="border-r border-slate-900 p-2 whitespace-pre-line" rowSpan={3}>
+                      <span className="font-bold">{topics}</span>
+                      <br/><br/>
+                      {contentStandard}
+                    </td>
                     <td className="border-r border-slate-900 p-2 whitespace-pre-line" rowSpan={3}>{performanceStandard}</td>
                     <td className="border-r border-slate-900 p-2 whitespace-pre-line bg-slate-50/10">{mapData.acqComp}</td>
                     <td className="border-r border-slate-900 p-2 whitespace-pre-line text-slate-700">{mapData.acqAsst}</td>
