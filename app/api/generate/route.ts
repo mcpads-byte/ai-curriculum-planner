@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
-// Define the precise JSON structure we want Gemini to return
+// Run as an Edge Function to avoid the standard 10-second timeout limit
+export const runtime = 'edge';
+
 const CurriculumSchema = {
   type: "object",
   properties: {
@@ -27,18 +29,16 @@ export async function POST(request: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     
-    // Safety check to ensure the key is correctly initialized on the host server
     if (!apiKey) {
       return NextResponse.json({ error: "API Key missing on server configuration." }, { status: 500 });
     }
 
-    // Initialize the SDK directly inside the handler
     const ai = new GoogleGenAI({ apiKey });
     const { subject, grade } = await request.json();
 
-    // FIXED: Using the universally stable model identifier
+    // FIXED: Using the standard production model string for 2026
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash', 
+      model: 'gemini-3.5-flash', 
       contents: `Create a comprehensive, structured 4-week learning plan and curriculum map for the subject "${subject}" tailored for Grade ${grade}.`,
       config: {
         responseMimeType: "application/json",
@@ -46,7 +46,6 @@ export async function POST(request: Request) {
       }
     });
 
-    // Safe string handling to fulfill TypeScript strict rules
     const rawText = response.text || '{}';
     const data = JSON.parse(rawText);
     return NextResponse.json(data);
