@@ -1,68 +1,92 @@
-import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
 export const runtime = 'edge';
 
-// Schema designed to return an array of rows—one for each competency
-const CurriculumMapSchema = {
+const OfficialMapSchema = {
   type: "object",
   properties: {
-    rows: {
-      type: "array",
-      description: "A list of curriculum rows, generating exactly one item per input learning competency.",
-      items: {
-        type: "object",
-        properties: {
-          competency: { type: "string", description: "The specific individual learning competency being addressed in this row." },
-          alignedActivities: { type: "string", description: "Engaging classroom activities tailored to this competency and integrating the specified core values." },
-          alignedAssessments: { type: "string", description: "10-15 targeted evaluation items or tasks checking mastery of this specific competency." },
-          alignedResources: { type: "string", description: "Textbook pages, handout references, or interactive tools for this competency." }
-        },
-        required: ["competency", "alignedActivities", "alignedAssessments", "alignedResources"]
-      }
+    acquisition: {
+      type: "object",
+      properties: {
+        competencies: { type: "string", description: "The competencies from the teacher's list that fall under Acquisition (A)." },
+        assessments: { type: "string", description: "Aligned assessment items or tasks for acquisition." },
+        activities: { type: "string", description: "Aligned classroom activities for acquisition." },
+        resources: { type: "string", description: "Learning resources and tools for acquisition." }
+      },
+      required: ["competencies", "assessments", "activities", "resources"]
+    },
+    makeMeaning: {
+      type: "object",
+      properties: {
+        competencies: { type: "string", description: "The competencies from the teacher's list that fall under Make Meaning (M)." },
+        assessments: { type: "string", description: "Aligned assessment tasks or CER elements for meaning-making." },
+        activities: { type: "string", description: "Aligned classroom activities for meaning-making." },
+        resources: { type: "string", description: "Learning resources and tools for meaning-making." }
+      },
+      required: ["competencies", "assessments", "activities", "resources"]
+    },
+    transfer: {
+      type: "object",
+      properties: {
+        competencies: { type: "string", description: "The competencies from the teacher's list that fall under Transfer (T)." },
+        assessments: { type: "string", description: "Aligned performance tasks or transfer checks." },
+        activities: { type: "string", description: "Aligned classroom activities for transfer." },
+        resources: { type: "string", description: "Learning resources and tools for transfer." }
+      },
+      required: ["competencies", "assessments", "activities", "resources"]
     }
   },
-  required: ["rows"]
+  required: ["acquisition", "makeMeaning", "transfer"]
 };
 
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: "API Key missing" }, { status: 500 });
+    if (!apiKey) return new Response(JSON.stringify({ error: "Missing API Key" }), { status: 500 });
 
     const ai = new GoogleGenAI({ apiKey });
     const body = await request.json();
     
     const { subject, grade, competencies, topics, contentStandard, performanceStandard, coreValues } = body;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: `You are an expert curriculum design engine working under strict UbD guidelines.
+    const responseStream = await ai.models.generateContentStream({
+      model: 'gemini-2.5-flash',
+      contents: `You are an expert curriculum engine mapping a unit for Subject: "${subject}", ${grade}.
       
-      Teacher Global Inputs:
-      - Subject Name: "${subject}"
-      - Grade Level: "${grade}"
-      - Global Content Standard: "${contentStandard}"
-      - Global Performance Standard: "${performanceStandard}"
-      - Target Topics: "${topics}"
-      - Selected Core Institutional Values: "${coreValues}"
-      
-      The teacher has provided the following raw learning competencies:
-      "${competencies}"
+      Teacher's Core Configurations:
+      - Content Standard: "${contentStandard}"
+      - Performance Standard: "${performanceStandard}"
+      - Topics: "${topics}"
+      - Core Institutional Values: "${coreValues}"
+      - Raw Competencies to Classify: "${competencies}"
       
       TASK:
-      1. Parse out and separate each distinct learning competency found in the text.
-      2. For EVERY individual competency, generate a corresponding object in the 'rows' array containing custom-aligned Activities, Assessments, and Resources.
-      3. Ensure the classroom activities actively reflect and weave in the institutional core values provided.`,
-      config: { 
-        responseMimeType: "application/json", 
-        responseSchema: CurriculumMapSchema 
+      1. Classify all provided competencies into their correct category: Acquisition, Make Meaning, or Transfer.
+      2. For each category block, generate perfectly aligned Assessments, Activities, and Resources.
+      3. Seamlessly weave the institutional core values into the activities.
+      
+      Return your entire response as a single valid JSON object matching the requested schema layout. No extra text markdown wrappers outside the json structure.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: OfficialMapSchema
       }
     });
 
-    return NextResponse.json(JSON.parse(response.text || '{}'));
-  } catch (error) {
-    console.error("Mapping Error:", error);
-    return NextResponse.json({ error: "Generation pipeline failed" }, { status: 500 });
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        for await (const chunk of responseStream) {
+          if (chunk.text) controller.enqueue(encoder.encode(chunk.text));
+        }
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Transfer-Encoding': 'chunked' },
+    });
+
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 }
