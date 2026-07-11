@@ -36,9 +36,9 @@ export async function POST(request: Request) {
     const ai = new GoogleGenAI({ apiKey });
     const { subject, grade } = await request.json();
 
-    // Calling the updated model name
+    // FIXED: Using the universally stable model identifier
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-1.5-flash', 
       contents: `Create a comprehensive, structured 4-week learning plan and curriculum map for the subject "${subject}" tailored for Grade ${grade}.`,
       config: {
         responseMimeType: "application/json",
