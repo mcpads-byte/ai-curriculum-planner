@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "Missing API Key configuration" }), { status: 500 });
+      return new Response(JSON.stringify({ error: "Missing API Key" }), { status: 500 });
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -14,20 +14,19 @@ export async function POST(request: Request) {
     
     const { subject, grade, competencies, topics, contentStandard, performanceStandard, coreValues } = body;
 
-    // We remove responseSchema entirely to let the model start talking immediately without internal buffering
     const responseStream = await ai.models.generateContentStream({
       model: 'gemini-2.5-flash',
-      contents: `You are an expert curriculum design engine working under strict UbD guidelines.
+      contents: `You are an expert curriculum design engine running under strict UbD guidelines.
       
       Teacher Global Inputs:
       - Subject Name: "${subject}"
       - Grade Level: "${grade}"
-      - Global Content Standard: "${contentStandard}"
-      - Global Performance Standard: "${performanceStandard}"
+      - Content Standard: "${contentStandard}"
+      - Performance Standard: "${performanceStandard}"
       - Target Topics: "${topics}"
       - Selected Core Institutional Values: "${coreValues}"
       
-      The teacher has provided these raw learning competencies:
+      Raw Learning Competencies to process:
       "${competencies}"
       
       TASK:
@@ -35,58 +34,61 @@ export async function POST(request: Request) {
       2. For each category block, generate targeted Assessments, Activities, and Resources.
       3. Seamlessly weave the institutional core values into the activities.
       
-      CRITICAL RULE: You must output your entire response as a single, valid JSON object following the format below. Do not include markdown blocks like \`\`\`json. Just start with the opening curly brace.
-
-      Format template:
-      {
-        "acquisition": {
-          "competencies": "string listing the categorized competencies",
-          "assessments": "detailed text list of assessment tasks",
-          "activities": "detailed text list of classroom activities",
-          "resources": "text list of tools and materials"
-        },
-        "makeMeaning": {
-          "competencies": "string listing the categorized competencies",
-          "assessments": "detailed text list of assessment tasks",
-          "activities": "detailed text list of classroom activities",
-          "resources": "text list of tools and materials"
-        },
-        "transfer": {
-          "competencies": "string listing the categorized competencies",
-          "assessments": "detailed text list of assessment tasks",
-          "activities": "detailed text list of classroom activities",
-          "resources": "text list of tools and materials"
-        }
-      }`,
+      CRITICAL FORMATTING RULE:
+      You must format your entire response using the exact text tags below to separate fields. Do not write any conversational text or markdown outside these tags.
+      
+      [ACQUISITION_COMPETENCIES]
+      (List the competencies classified under Acquisition here)
+      
+      [ACQUISITION_ASSESSMENTS]
+      (List the generated assessments for Acquisition here)
+      
+      [ACQUISITION_ACTIVITIES]
+      (List the generated activities for Acquisition here)
+      
+      [ACQUISITION_RESOURCES]
+      (List the generated resources for Acquisition here)
+      
+      [MEANING_COMPETENCIES]
+      (List the competencies classified under Make Meaning here)
+      
+      [MEANING_ASSESSMENTS]
+      (List the generated assessments for Make Meaning here)
+      
+      [MEANING_ACTIVITIES]
+      (List the generated activities for Make Meaning here)
+      
+      [MEANING_RESOURCES]
+      (List the generated resources for Make Meaning here)
+      
+      [TRANSFER_COMPETENCIES]
+      (List the competencies classified under Transfer here)
+      
+      [TRANSFER_ASSESSMENTS]
+      (List the generated assessments for Transfer here)
+      
+      [TRANSFER_ACTIVITIES]
+      (List the generated activities for Transfer here)
+      
+      [TRANSFER_RESOURCES]
+      (List the generated resources for Transfer here)`,
     });
 
-    // Immediately return the stream so the browser catches data chunks within milliseconds
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
-        try {
-          for await (const chunk of responseStream) {
-            if (chunk.text) {
-              controller.enqueue(encoder.encode(chunk.text));
-            }
-          }
-        } catch (err) {
-          controller.error(err);
-        } finally {
-          controller.close();
+        for await (const chunk of responseStream) {
+          if (chunk.text) controller.enqueue(encoder.encode(chunk.text));
         }
+        controller.close();
       },
     });
 
     return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
-      },
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Transfer-Encoding': 'chunked' },
     });
 
   } catch (error: any) {
-    console.error("Stream initialization error:", error);
-    return new Response(JSON.stringify({ error: "Failed to open stream connection" }), { status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 }
