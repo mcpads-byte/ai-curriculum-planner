@@ -2,42 +2,43 @@
 import { useState } from 'react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'curriculum' | 'weekly'>('curriculum');
+  const [loading, setLoading] = useState(false);
+  const [resultRows, setResultRows] = useState<any[]>([]);
+
+  // Form Inputs
   const [subject, setSubject] = useState('');
   const [grade, setGrade] = useState('');
   const [competencies, setCompetencies] = useState('');
   const [topics, setTopics] = useState('');
-  const [week, setWeek] = useState('Week 1');
-  
-  const [resultData, setResultData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [contentStandard, setContentStandard] = useState('');
+  const [performanceStandard, setPerformanceStandard] = useState('');
+  const [coreValues, setCoreValues] = useState('God Fearing, Respectfulness, Initiative, Love of Nature, Leadership');
 
-  const handleGenerate = async (e: React.FormEvent) => {
+  const handleMapGeneration = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject || !grade || !competencies) return alert("Please fill out Subject, Grade, and Competencies fields!");
-    
+    if (!subject || !grade || !competencies || !topics || !contentStandard || !performanceStandard) {
+      return alert("Please ensure all input fields (including Content & Performance Standards) are filled out!");
+    }
+
     setLoading(true);
-    setResultData(null);
-    
+    setResultRows([]);
+
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: activeTab,
-          subject,
-          grade,
-          competenciesInput: competencies,
-          topicsInput: topics,
-          selectedWeek: week
+          subject, grade, competencies, topics, contentStandard, performanceStandard, coreValues
         }),
       });
-      
+
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setResultData(data);
+      
+      // Save the array of parsed rows returned by the AI
+      setResultRows(data.rows || []);
     } catch (error) {
-      alert("Failed to generate plan. Please try again.");
+      alert("Failed to build out aligned curriculum maps. Please check your setup.");
     } finally {
       setLoading(false);
     }
@@ -47,230 +48,127 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-800 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Workspace Title */}
-        <header className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Institutional Instructional Design Suite</h1>
-            <p className="text-sm text-slate-500 mt-1">Automate official Curriculum Maps and detailed dual-column Weekly Plans with UbD frameworks.</p>
-          </div>
-          
-          {/* Engine Selector Buttons */}
-          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 w-full md:w-auto">
-            <button 
-              onClick={() => { setActiveTab('curriculum'); setResultData(null); }}
-              className={`flex-1 md:flex-initial px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'curriculum' ? 'bg-white text-blue-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Curriculum Map
-            </button>
-            <button 
-              onClick={() => { setActiveTab('weekly'); setResultData(null); }}
-              className={`flex-1 md:flex-initial px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'weekly' ? 'bg-white text-blue-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Weekly Learning Plan
-            </button>
-          </div>
+        {/* Header Title */}
+        <header className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">Curriculum Design & Alignment Matrix</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Input your standards, topics, and competencies. The system will build out beautifully separated rows for each competency.</p>
         </header>
 
-        {/* Input Interface Layout */}
+        {/* Complete Input Form Section */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <form onSubmit={handleGenerate} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <form onSubmit={handleMapGeneration} className="space-y-4">
+            
+            {/* Subject & Grade Rows */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Subject Name</label>
-                <input type="text" placeholder="e.g., Mathematics 10" className="w-full border border-slate-300 p-2 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600" value={subject} onChange={e => setSubject(e.target.value)} />
+                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Subject Title</label>
+                <input type="text" placeholder="e.g., Mathematics 10" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none focus:ring-2 focus:ring-blue-600" value={subject} onChange={e => setSubject(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Grade Level</label>
-                <input type="text" placeholder="e.g., Grade 10" className="w-full border border-slate-300 p-2 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600" value={grade} onChange={e => setGrade(e.target.value)} />
+                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Target Grade Level</label>
+                <input type="text" placeholder="e.g., Grade 10" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none focus:ring-2 focus:ring-blue-600" value={grade} onChange={e => setGrade(e.target.value)} />
               </div>
-              {activeTab === 'weekly' ? (
-                <div>
-                  <label className="block text-xs font-black text-slate-700 uppercase mb-1">Target Week</label>
-                  <select className="w-full border border-slate-300 p-2 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600" value={week} onChange={e => setWeek(e.target.value)}>
-                    <option>Week 1</option><option>Week 2</option><option>Week 3</option><option>Week 4</option>
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-black text-slate-700 uppercase mb-1">Topics Mapping (Optional)</label>
-                  <input type="text" placeholder="e.g., Quadratic Equations, Functions" className="w-full border border-slate-300 p-2 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600" value={topics} onChange={e => setTopics(e.target.value)} />
-                </div>
-              )}
             </div>
 
+            {/* Standards Input Boxes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Content Standard</label>
+                <textarea rows={2} placeholder="What should learners conceptually understand..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none focus:ring-2 focus:ring-blue-600" value={contentStandard} onChange={e => setContentStandard(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Performance Standard</label>
+                <textarea rows={2} placeholder="What should learners be able to produce/perform transferably..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none focus:ring-2 focus:ring-blue-600" value={performanceStandard} onChange={e => setPerformanceStandard(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Topics & Competencies Rows */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Learning Competencies (You can paste multiple items here)</label>
+                <textarea rows={4} placeholder="e.g., M10AL-Ia-1: Solves problems involving quadratic equations..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none focus:ring-2 focus:ring-blue-600" value={competencies} onChange={e => setCompetencies(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-700 uppercase mb-1">Target Topics / Chapters</label>
+                <textarea rows={4} placeholder="e.g., Quadratic Equations, Factoring Radicals..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none focus:ring-2 focus:ring-blue-600" value={topics} onChange={e => setTopics(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Core Institutional Values */}
             <div>
-              <label className="block text-xs font-black text-slate-700 uppercase mb-1">Learning Competencies for Processing</label>
-              <textarea rows={3} placeholder="Paste your official DepEd / institutional learning competencies text here..." className="w-full border border-slate-300 p-2 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-blue-600" value={competencies} onChange={e => setCompetencies(e.target.value)} />
+              <label className="block text-xs font-black text-slate-700 uppercase mb-1">Institutional Core Values Integration</label>
+              <input type="text" className="w-full border border-slate-300 p-2 rounded text-xs bg-white font-bold text-emerald-800 outline-none focus:ring-2 focus:ring-blue-600" value={coreValues} onChange={e => setCoreValues(e.target.value)} />
             </div>
 
-            <button type="submit" disabled={loading} className={`w-full p-2.5 rounded-lg font-bold text-sm text-white transition-colors ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-900 hover:bg-slate-900'}`}>
-              {loading ? 'Processing Instructional Design Blueprints...' : `Generate Official ${activeTab === 'curriculum' ? 'Curriculum Map' : 'Weekly Plan Sheet'}`}
+            {/* Submit Action */}
+            <button type="submit" disabled={loading} className="w-full p-2.5 rounded-lg font-bold text-xs uppercase tracking-wider text-white bg-slate-900 hover:bg-blue-900 transition-colors">
+              {loading ? 'Analyzing Tracks & Aligning Rows...' : 'Map Aligned Resources & Assessments'}
             </button>
           </form>
         </div>
 
-        {/* Results Render Output Workspace */}
-        {resultData && activeTab === 'curriculum' && (
-          <div className="bg-white p-8 rounded-xl border-2 border-slate-800 shadow-md space-y-6">
-            <div className="border-b-2 border-slate-800 pb-4 text-sm grid grid-cols-2 md:grid-cols-4 gap-2 font-bold text-slate-700">
-              <div>Subject: <span className="font-normal">{subject}</span></div>
-              <div>Grade Level: <span className="font-normal">{grade}</span></div>
-              <div>Teacher: <span className="font-normal">_________________</span></div>
-              <div>Term: <span className="font-normal">{resultData.term || 'Term 1'}</span></div>
+        {/* Separated Row Curriculum Map Registry Output View */}
+        {resultRows.length > 0 && (
+          <div className="bg-white p-6 rounded-xl border border-slate-300 shadow-md space-y-4">
+            <div className="text-center font-serif text-base font-bold uppercase tracking-tight border-b border-slate-900 pb-2">
+              Official Curriculum Mapping Registry — {subject} ({grade})
             </div>
             
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse border-2 border-slate-800 text-xs bg-white">
+              <table className="w-full border-collapse border-2 border-slate-900 text-xs font-serif" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
                 <thead>
-                  <tr className="bg-slate-100 font-black text-slate-900 border-b-2 border-slate-800 uppercase">
-                    <th className="border-r border-slate-400 p-2 w-32">TOPIC/QUARTER</th>
-                    <th className="border-r border-slate-400 p-2 w-44">CONTENT STANDARD</th>
-                    <th className="border-r border-slate-400 p-2 w-44">PERFORMANCE STANDARD</th>
-                    <th className="border-r border-slate-400 p-2 w-1/4">LEARNING COMPETENCIES</th>
-                    <th className="border-r border-slate-400 p-2">ASSESSMENTS</th>
-                    <th className="border-r border-slate-400 p-2">ACTIVITIES</th>
-                    <th className="border-r border-slate-400 p-2">RESOURCES</th>
-                    <th className="p-2">INSTITUTIONAL CORE VALUES</th>
+                  <tr className="bg-slate-100 font-bold border-b-2 border-slate-900 text-center uppercase tracking-tight">
+                    <th className="border-r border-slate-900 p-2 w-1/5">Global Standards & Topics</th>
+                    <th className="border-r border-slate-900 p-2 w-1/5">Target Competency</th>
+                    <th className="border-r border-slate-900 p-2 w-1/4">AI Aligned Activities</th>
+                    <th className="border-r border-slate-900 p-2 w-1/4">AI Aligned Assessments</th>
+                    <th className="p-2 w-1/6">Resources & Values</th>
                   </tr>
                 </thead>
-                <tbody className="align-top divide-y divide-slate-800">
-                  {/* Acquisition Stage Row */}
-                  <tr>
-                    <td className="border-r border-slate-400 p-2 font-black bg-slate-50 text-blue-900">ACQUISITION</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line" rowSpan={3}>{resultData.contentStandard}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line" rowSpan={3}>{resultData.performanceStandard}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.acquisition?.competencies}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.acquisition?.assessments}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.acquisition?.activities}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line" rowSpan={3}>{resultData.resources}</td>
-                    <td className="p-2 text-emerald-900 font-bold whitespace-pre-line" rowSpan={3}>{resultData.coreValuesIntegration}</td>
-                  </tr>
-                  {/* Meaning Stage Row */}
-                  <tr>
-                    <td className="border-r border-slate-400 p-2 font-black bg-slate-50 text-blue-900">MAKE MEANING</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.makeMeaning?.competencies}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.makeMeaning?.assessments}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.makeMeaning?.activities}</td>
-                  </tr>
-                  {/* Transfer Stage Row */}
-                  <tr>
-                    <td className="border-r border-slate-400 p-2 font-black bg-slate-50 text-blue-900">TRANSFER</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.transfer?.competencies}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.transfer?.assessments}</td>
-                    <td className="border-r border-slate-400 p-2 whitespace-pre-line">{resultData.transfer?.activities}</td>
-                  </tr>
+                <tbody className="align-top divide-y divide-slate-900">
+                  {resultRows.map((rowItem, index) => (
+                    <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                      {/* Left Column: Prints your global setup data only on the first row, or neatly matches it down */}
+                      {index === 0 ? (
+                        <td className="border-r border-slate-900 p-2 bg-slate-50/70 space-y-2 font-sans" rowSpan={resultRows.length}>
+                          <div><strong className="block text-[9px] uppercase tracking-wider text-slate-500">Topic Base:</strong> <span className="italic font-serif text-slate-900 text-xs font-bold">{topics}</span></div>
+                          <hr className="border-slate-300" />
+                          <div><strong className="block text-[9px] uppercase tracking-wider text-slate-500">Content Standard:</strong> <span className="text-slate-700 text-xs">{contentStandard}</span></div>
+                          <hr className="border-slate-300" />
+                          <div><strong className="block text-[9px] uppercase tracking-wider text-slate-500">Performance Standard:</strong> <span className="text-slate-700 text-xs">{performanceStandard}</span></div>
+                        </td>
+                      ) : null}
+
+                      {/* Mapped Competency (One unique block per row!) */}
+                      <td className="border-r border-slate-900 p-2 whitespace-pre-line font-bold text-slate-900 bg-slate-50/20">
+                        {rowItem.competency}
+                      </td>
+
+                      {/* Aligned Activities specific to this row's competency */}
+                      <td className="border-r border-slate-900 p-2 whitespace-pre-line text-slate-700 leading-relaxed">
+                        {rowItem.alignedActivities}
+                      </td>
+
+                      {/* Aligned Assessments specific to this row's competency */}
+                      <td className="border-r border-slate-900 p-2 whitespace-pre-line text-slate-700 leading-relaxed">
+                        {rowItem.alignedAssessments}
+                      </td>
+
+                      {/* Aligned Resources and Global Values column */}
+                      <td className="p-2 space-y-3">
+                        <div className="whitespace-pre-line text-slate-700">
+                          {rowItem.alignedResources}
+                        </div>
+                        <div className="p-1.5 bg-emerald-50 border border-emerald-200 text-[10px] font-sans font-bold text-emerald-800 rounded">
+                          <span className="block text-[8px] uppercase tracking-widest text-emerald-600 mb-0.5 font-black">Values Framework:</span>
+                          {coreValues}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-
-        {/* Weekly Plan Blueprint Layout View */}
-        {resultData && activeTab === 'weekly' && (
-          <div className="bg-white p-8 rounded-xl border border-slate-300 shadow-md space-y-8 max-w-4xl mx-auto font-serif" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
-            <h2 className="text-center text-lg font-bold uppercase border-b-2 border-slate-900 pb-2">
-              {week} Lesson Blueprint: {subject} ({grade})
-            </h2>
-
-            {/* I. Explore Section Table */}
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-blue-900">I. EXPLORE</h3>
-              <table className="w-full border-collapse border border-slate-900 text-xs">
-                <tbody>
-                  <tr className="border-b border-slate-900 align-top">
-                    <td className="w-1/3 border-r border-slate-900 p-2 font-bold space-y-2 bg-slate-50">
-                      <div>Topic: {resultData.explore?.topic}</div>
-                      <div>Content Standard: {resultData.explore?.contentStandard}</div>
-                      <div>Performance Standard: {resultData.explore?.performanceStandard}</div>
-                    </td>
-                    <td className="p-2 space-y-3 whitespace-pre-line">
-                      <div><strong className="block uppercase text-[10px] text-slate-500">Unit Overview:</strong>{resultData.explore?.overview}</div>
-                      <div><strong className="block uppercase text-[10px] text-slate-500">This Unit Is About:</strong>{resultData.explore?.thisUnitIsAbout}</div>
-                      <div><strong className="block uppercase text-[10px] text-slate-500">You Will Learn To:</strong>{resultData.explore?.youWillLearnTo}</div>
-                      <div><strong className="block uppercase text-[10px] text-slate-500">Essential Question:</strong>{resultData.explore?.essentialQuestion}</div>
-                      <div><strong className="block uppercase text-[10px] text-slate-500">Conceptual Change Activity:</strong>{resultData.explore?.conceptualChangeActivity}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-
-            {/* II. Acquisition Section Table */}
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-blue-900">II. ACQUISITION</h3>
-              <table className="w-full border-collapse border border-slate-900 text-xs">
-                <tbody>
-                  <tr className="border-b border-slate-900 align-top">
-                    <td className="w-1/3 border-r border-slate-900 p-2 font-bold space-y-4 bg-slate-50">
-                      <div>Competency: {resultData.acquisition?.competency}</div>
-                      <div>Learning Targets: <div className="font-normal text-slate-700 whitespace-pre-line mt-1">{resultData.acquisition?.targets}</div></div>
-                      <div>Success Criteria: <div className="font-normal text-slate-700 whitespace-pre-line mt-1">{resultData.acquisition?.criteria}</div></div>
-                      <div>Look-Fors: <div className="font-normal text-slate-700 whitespace-pre-line mt-1">{resultData.acquisition?.lookFors}</div></div>
-                    </td>
-                    <td className="p-2 space-y-3 whitespace-pre-line">
-                      <div><strong>Activity Introduction:</strong> {resultData.acquisition?.activityIntro}</div>
-                      <div><strong>Step-by-Step Instructions:</strong> {resultData.acquisition?.activitySteps}</div>
-                      <div><strong>Analysis Questions:</strong> {resultData.acquisition?.activityQuestions}</div>
-                      <div><strong>Resources & Clickable Scaffolds:</strong> <span className="text-blue-700 underline cursor-pointer">{resultData.acquisition?.resourcesLinks}</span></div>
-                      <div><strong>Sample Student Worksheet Draft:</strong> {resultData.acquisition?.sampleWorksheet}</div>
-                      <div><strong>Modular Activity Matrix:</strong> {resultData.acquisition?.modularActivity}</div>
-                      <div><strong>Asynchronous Extension:</strong> {resultData.acquisition?.asynchronousActivity}</div>
-                      <div className="bg-slate-50 p-2 border border-slate-200 rounded"><strong>Summative Evaluation Items:</strong> {resultData.acquisition?.assessmentItems}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-
-            {/* III. Make Meaning Section Table */}
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-blue-900">III. MAKE MEANING</h3>
-              <table className="w-full border-collapse border border-slate-900 text-xs">
-                <tbody>
-                  <tr className="border-b border-slate-900 align-top">
-                    <td className="w-1/3 border-r border-slate-900 p-2 font-bold space-y-4 bg-slate-50">
-                      <div>Competency: {resultData.makeMeaning?.competency}</div>
-                      <div>Learning Targets: <div className="font-normal text-slate-700 whitespace-pre-line mt-1">{resultData.makeMeaning?.targets}</div></div>
-                      <div>Success Criteria: <div className="font-normal text-slate-700 whitespace-pre-line mt-1">{resultData.makeMeaning?.criteria}</div></div>
-                    </td>
-                    <td className="p-2 space-y-3 whitespace-pre-line">
-                      <div className="bg-blue-50/50 p-2 border border-blue-200"><strong>Claim-Evidence-Reasoning (CER) Task:</strong> {resultData.makeMeaning?.cerActivityIntro}</div>
-                      <div><strong>CER Operational Steps:</strong> {resultData.makeMeaning?.cerActivitySteps}</div>
-                      <div><strong>Divided CER Prompts (Claim / Evidence / Reasoning):</strong> {resultData.makeMeaning?.cerWorksheetQuestions}</div>
-                      <div><strong>Handout References:</strong> {resultData.makeMeaning?.cerResources}</div>
-                      <div className="text-emerald-800 bg-emerald-50/50 p-2 border border-emerald-200"><strong>Completed Sample Answer Worksheet Key:</strong> {resultData.makeMeaning?.cerSampleCompletedWorksheet}</div>
-                      <div><strong>Modular Framework:</strong> {resultData.makeMeaning?.modularActivity}</div>
-                      <div><strong>Asynchronous Matrix:</strong> {resultData.makeMeaning?.asynchronousActivity}</div>
-                      <div><strong>Assessment Items:</strong> {resultData.makeMeaning?.assessmentItems}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-
-            {/* IV. Transfer Section Table */}
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-blue-900">IV. TRANSFER</h3>
-              <table className="w-full border-collapse border border-slate-900 text-xs">
-                <tbody>
-                  <tr className="align-top">
-                    <td className="w-1/3 border-r border-slate-900 p-2 font-bold space-y-4 bg-slate-50">
-                      <div>Performance Standard: {resultData.transfer?.performanceStandard}</div>
-                      <div>Competency: {resultData.transfer?.competency}</div>
-                    </td>
-                    <td className="p-2 space-y-3 whitespace-pre-line">
-                      <div className="p-2 bg-amber-50/50 border border-amber-200 font-bold">Values Integration & Reflection Focus: {resultData.transfer?.valuesIntro}</div>
-                      <div><strong>Implementation Steps:</strong> {resultData.transfer?.valuesSteps}</div>
-                      <div><strong>Enrichment Application Activity:</strong> {resultData.transfer?.valuesEnrichmentActivity}</div>
-                      <div className="text-slate-600 italic"><strong>Core Values Alignment Justification Matrix:</strong> {resultData.transfer?.valuesEnrichmentExplanation}</div>
-                      <div><strong>Modular Task Instructions:</strong> {resultData.transfer?.modularActivity}</div>
-                      <div><strong>Asynchronous Task Instructions:</strong> {resultData.transfer?.asynchronousActivity}</div>
-                      <div><strong>Assessment Items:</strong> {resultData.transfer?.assessmentItems}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
           </div>
         )}
       </div>
