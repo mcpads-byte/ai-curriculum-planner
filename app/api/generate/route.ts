@@ -39,8 +39,9 @@ export async function POST(request: Request) {
       }
     });
 
-    // Safe parsing that satisfies TypeScript rules
-    const data = JSON.parse(response.text || '{}');
+    // Safe parsing that satisfies TypeScript strict mode rules
+    const rawText = response.text || '{}';
+    const data = JSON.parse(rawText);
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error generating curriculum:", error);
