@@ -12,23 +12,34 @@ export default function Home() {
   });
 
   // Form Inputs
-  const [subject, setSubject] = useState('');
-  const [grade, setGrade] = useState('');
+  const [subject, setSubject] = useState('MATHEMATICS');
+  const [grade, setGrade] = useState('10');
   const [competencies, setCompetencies] = useState('');
   const [topics, setTopics] = useState('');
   const [contentStandard, setContentStandard] = useState('');
   const [performanceStandard, setPerformanceStandard] = useState('');
   const [coreValues, setCoreValues] = useState('God Fearing, Respectfulness, Initiative, Love of Nature, Leadership');
 
-  // Helper function to extract text cleanly between explicit tag blocks
-  const parseTagBlock = (fullText: string, targetTag: string, nextTag: string): string => {
-    const startIdx = fullText.indexOf(targetTag);
-    if (startIdx === -1) return '';
+  // Flexible RegEx extractor to prevent parsing drops
+  const extractBlock = (text: string, currentTag: string, nextTag?: string): string => {
+    const escapedTag = currentTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const startRegex = new RegExp(`${escapedTag}\\s*\\n?`, 'i');
+    const match = text.match(startRegex);
     
-    const startPos = startIdx + targetTag.length;
-    const endIdx = nextTag ? fullText.indexOf(nextTag, startPos) : fullText.length;
+    if (!match || match.index === undefined) return '';
+    const startPos = match.index + match[0].length;
     
-    return fullText.substring(startPos, endIdx === -1 ? fullText.length : endIdx).trim();
+    let endPos = text.length;
+    if (nextTag) {
+      const escapedNext = nextTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const endRegex = new RegExp(escapedNext, 'i');
+      const nextMatch = text.match(endRegex);
+      if (nextMatch && nextMatch.index !== undefined && nextMatch.index > startPos) {
+        endPos = nextMatch.index;
+      }
+    }
+    
+    return text.substring(startPos, endPos).trim();
   };
 
   const handleMapGeneration = async (e: React.FormEvent) => {
@@ -52,37 +63,43 @@ export default function Home() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let done = false;
-      let textBuffer = '';
+      let rawText = '';
 
-      // Stream chunks into our buffer text container natively
       while (!done) {
         const { value, done: readingDone } = await reader.read();
         done = readingDone;
         if (value) {
-          textBuffer += decoder.decode(value, { stream: !done });
-          
-          // Real-time parsing so the grid boxes fill up progressively while the user watches
-          setMapData({
-            acqComp: parseTagBlock(textBuffer, '===ACQ_COMP===', '===ACQ_ASST==='),
-            acqAsst: parseTagBlock(textBuffer, '===ACQ_ASST===', '===ACQ_ACT==='),
-            acqAct: parseTagBlock(textBuffer, '===ACQ_ACT===', '===ACQ_RES==='),
-            acqRes: parseTagBlock(textBuffer, '===ACQ_RES===', '===MM_COMP==='),
-            mmComp: parseTagBlock(textBuffer, '===MM_COMP===', '===MM_ASST==='),
-            mmAsst: parseTagBlock(textBuffer, '===MM_ASST===', '===MM_ACT==='),
-            mmAct: parseTagBlock(textBuffer, '===MM_ACT===', '===MM_RES==='),
-            mmRes: parseTagBlock(textBuffer, '===MM_RES===', '===TRANS_COMP==='),
-            transComp: parseTagBlock(textBuffer, '===TRANS_COMP===', '===TRANS_ASST==='),
-            transAsst: parseTagBlock(textBuffer, '===TRANS_ASST===', '===TRANS_ACT==='),
-            transAct: parseTagBlock(textBuffer, '===TRANS_ACT===', '===TRANS_RES==='),
-            transRes: parseTagBlock(textBuffer, '===TRANS_RES===', '')
-          });
-          setHasGenerated(true);
+          rawText += decoder.decode(value, { stream: !done });
         }
       }
 
+      // Safely extract content matching template structural tags
+      const acqComp = extractBlock(rawText, '[ACQUISITION_COMPETENCIES]', '[ACQUISITION_ASSESSMENTS]');
+      const acqAsst = extractBlock(rawText, '[ACQUISITION_ASSESSMENTS]', '[ACQUISITION_ACTIVITIES]');
+      const acqAct = extractBlock(rawText, '[ACQUISITION_ACTIVITIES]', '[ACQUISITION_RESOURCES]');
+      const acqRes = extractBlock(rawText, '[ACQUISITION_RESOURCES]', '[MEANING_COMPETENCIES]');
+
+      const mmComp = extractBlock(rawText, '[MEANING_COMPETENCIES]', '[MEANING_ASSESSMENTS]');
+      const mmAsst = extractBlock(rawText, '[MEANING_ASSESSMENTS]', '[MEANING_ACTIVITIES]');
+      const mmAct = extractBlock(rawText, '[MEANING_ACTIVITIES]', '[MEANING_RESOURCES]');
+      const mmRes = extractBlock(rawText, '[MEANING_RESOURCES]', '[TRANSFER_COMPETENCIES]');
+
+      const transComp = extractBlock(rawText, '[TRANSFER_COMPETENCIES]', '[TRANSFER_ASSESSMENTS]');
+      const transAsst = extractBlock(rawText, '[TRANSFER_ASSESSMENTS]', '[TRANSFER_ACTIVITIES]');
+      const transAct = extractBlock(rawText, '[TRANSFER_ACTIVITIES]', '[TRANSFER_RESOURCES]');
+      const transRes = extractBlock(rawText, '[TRANSFER_RESOURCES]');
+
+      setMapData({
+        acqComp, acqAsst, acqAct, acqRes,
+        mmComp, mmAsst, mmAct, mmRes,
+        transComp, transAsst, transAct, transRes
+      });
+      
+      setHasGenerated(true);
+
     } catch (error) {
-      console.error("Mapping engine pipeline error:", error);
-      alert("Failed to build curriculum mapping data seamlessly.");
+      console.error(error);
+      alert("System processing timeout or streaming interruption occurred.");
     } finally {
       setLoading(false);
     }
@@ -93,43 +110,43 @@ export default function Home() {
       <div className="max-w-7xl mx-auto space-y-6">
         
         <header className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">Official Curriculum Map Generator</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Enter standards and competencies to automatically distribute content across structured AMT rows.</p>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">Curriculum Map Alignment Studio</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Generate and parse standard metrics directly into formatted curriculum grid layouts.</p>
         </header>
 
-        {/* Input Form Section */}
+        {/* Form Controls */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <form onSubmit={handleMapGeneration} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Subject</label>
-                <input type="text" placeholder="e.g., MATHEMATICS" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none font-bold" value={subject} onChange={e => setSubject(e.target.value)} />
+                <input type="text" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none font-bold" value={subject} onChange={e => setSubject(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Grade Level</label>
-                <input type="text" placeholder="e.g., 10" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none font-bold" value={grade} onChange={e => setGrade(e.target.value)} />
+                <input type="text" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none font-bold" value={grade} onChange={e => setGrade(e.target.value)} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Content Standard</label>
-                <textarea rows={4} placeholder="Paste content standard..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={contentStandard} onChange={e => setContentStandard(e.target.value)} />
+                <textarea rows={3} placeholder="Paste content standards..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={contentStandard} onChange={e => setContentStandard(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Performance Standard</label>
-                <textarea rows={4} placeholder="Paste performance standard..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={performanceStandard} onChange={e => setPerformanceStandard(e.target.value)} />
+                <textarea rows={3} placeholder="Paste performance standards..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={performanceStandard} onChange={e => setPerformanceStandard(e.target.value)} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Learning Competencies</label>
-                <textarea rows={4} placeholder="Paste all competencies here..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={competencies} onChange={e => setCompetencies(e.target.value)} />
+                <textarea rows={3} placeholder="Paste targeting competencies..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={competencies} onChange={e => setCompetencies(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Topic / Quarter</label>
-                <textarea rows={4} placeholder="e.g., First Quarter - Trigonometry..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={topics} onChange={e => setTopics(e.target.value)} />
+                <textarea rows={3} placeholder="e.g., First Quarter..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={topics} onChange={e => setTopics(e.target.value)} />
               </div>
             </div>
 
@@ -138,17 +155,18 @@ export default function Home() {
               <input type="text" className="w-full border border-slate-300 p-2 rounded text-xs bg-white font-bold text-emerald-800 outline-none" value={coreValues} onChange={e => setCoreValues(e.target.value)} />
             </div>
 
-            <button type="submit" disabled={loading} className="w-full p-2.5 rounded-lg font-bold text-xs uppercase tracking-wider text-white bg-slate-900 hover:bg-blue-900 transition-colors">
-              {loading ? 'Processing & Aligning Map...' : 'Generate Curriculum Map Document'}
+            <button type="submit" disabled={loading} className="w-full p-2.5 rounded-lg font-bold text-xs uppercase tracking-wider text-white bg-slate-900 hover:bg-emerald-700 transition-colors">
+              {loading ? 'Analyzing & Populating Table Matrix...' : 'Process Map Document'}
             </button>
           </form>
         </div>
 
-        {/* Official Template Table Matrix Output */}
+        {/* Output Matrix Structure matching the template perfectly */}
         {hasGenerated && (
           <div className="bg-white p-6 rounded-xl border border-slate-300 shadow-md space-y-4">
-            <div className="text-sm font-serif text-slate-700 border-b pb-2">
-              <div><strong>Subject:</strong> {subject} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Grade Level:</strong> {grade}</div>
+            <div className="text-sm font-serif text-slate-700 border-b pb-2 flex justify-between">
+              <div><strong>Subject:</strong> {subject.toUpperCase()} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Grade Level:</strong> {grade}</div>
+              <div className="text-xs text-slate-400 font-sans">Term: Term 1</div>
             </div>
 
             <div className="overflow-x-auto">
@@ -170,12 +188,11 @@ export default function Home() {
                   {/* Row 1: ACQUISITION */}
                   <tr>
                     <td className="border-r border-slate-900 p-2 font-bold bg-slate-50 text-center">ACQUISITION</td>
-                    <td className="border-r border-slate-900 p-2 whitespace-pre-line" rowSpan={3}>
-                      <span className="font-bold">{topics}</span>
-                      <br/><br/>
+                    <td className="border-r border-slate-900 p-2 whitespace-pre-line font-serif" rowSpan={3}>
+                      <div className="font-bold mb-2">{topics}</div>
                       {contentStandard}
                     </td>
-                    <td className="border-r border-slate-900 p-2 whitespace-pre-line" rowSpan={3}>{performanceStandard}</td>
+                    <td className="border-r border-slate-900 p-2 whitespace-pre-line font-serif" rowSpan={3}>{performanceStandard}</td>
                     <td className="border-r border-slate-900 p-2 whitespace-pre-line bg-slate-50/10">{mapData.acqComp}</td>
                     <td className="border-r border-slate-900 p-2 whitespace-pre-line text-slate-700">{mapData.acqAsst}</td>
                     <td className="border-r border-slate-900 p-2 whitespace-pre-line text-slate-700">{mapData.acqAct}</td>
@@ -204,6 +221,27 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
+
+            {/* Verification Signatures block matching bottom layout context */}
+            <div className="grid grid-cols-4 gap-4 pt-8 text-center text-[10pt] font-sans text-slate-600">
+              <div>
+                <div className="border-b border-slate-400 h-8"></div>
+                <div className="mt-1 font-bold">Subject Teacher</div>
+              </div>
+              <div>
+                <div className="border-b border-slate-400 h-8"></div>
+                <div className="mt-1 font-bold">Implementing Officer</div>
+              </div>
+              <div>
+                <div className="border-b border-slate-400 h-8"></div>
+                <div className="mt-1 font-bold">JHS Academic Coordinator</div>
+              </div>
+              <div>
+                <div className="border-b border-slate-400 h-8"></div>
+                <div className="mt-1 font-bold">School Principal</div>
+              </div>
+            </div>
+
           </div>
         )}
       </div>
