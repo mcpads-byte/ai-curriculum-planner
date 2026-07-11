@@ -35,11 +35,12 @@ export async function POST(request: Request) {
       contents: `Create a comprehensive, structured 4-week learning plan and curriculum map for the subject "${subject}" tailored for Grade ${grade}.`,
       config: {
         responseMimeType: "application/json",
-        responseSchema: CurriculumSchema, // Forces Gemini to output structural JSON
+        responseSchema: CurriculumSchema,
       }
     });
 
-    const data = JSON.parse(response.text);
+    // Safe parsing that satisfies TypeScript rules
+    const data = JSON.parse(response.text || '{}');
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error generating curriculum:", error);
