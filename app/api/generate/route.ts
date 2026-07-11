@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
-// Initialize the free SDK using your secret key
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-// This defines the exact structure we want Gemini to return
+// Define the precise JSON structure we want Gemini to return
 const CurriculumSchema = {
   type: "object",
   properties: {
@@ -28,10 +25,20 @@ const CurriculumSchema = {
 
 export async function POST(request: Request) {
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    // Safety check to ensure the key is correctly initialized on the host server
+    if (!apiKey) {
+      return NextResponse.json({ error: "API Key missing on server configuration." }, { status: 500 });
+    }
+
+    // Initialize the SDK directly inside the handler
+    const ai = new GoogleGenAI({ apiKey });
     const { subject, grade } = await request.json();
 
+    // Calling the updated model name
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash', 
       contents: `Create a comprehensive, structured 4-week learning plan and curriculum map for the subject "${subject}" tailored for Grade ${grade}.`,
       config: {
         responseMimeType: "application/json",
@@ -39,7 +46,7 @@ export async function POST(request: Request) {
       }
     });
 
-    // Safe parsing that satisfies TypeScript strict mode rules
+    // Safe string handling to fulfill TypeScript strict rules
     const rawText = response.text || '{}';
     const data = JSON.parse(rawText);
     return NextResponse.json(data);
