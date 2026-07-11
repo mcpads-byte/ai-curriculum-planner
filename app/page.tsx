@@ -20,6 +20,17 @@ export default function Home() {
   const [performanceStandard, setPerformanceStandard] = useState('');
   const [coreValues, setCoreValues] = useState('God Fearing, Respectfulness, Initiative, Love of Nature, Leadership');
 
+  // Helper function to extract text cleanly between explicit tag blocks
+  const parseTagBlock = (fullText: string, targetTag: string, nextTag: string): string => {
+    const startIdx = fullText.indexOf(targetTag);
+    if (startIdx === -1) return '';
+    
+    const startPos = startIdx + targetTag.length;
+    const endIdx = nextTag ? fullText.indexOf(nextTag, startPos) : fullText.length;
+    
+    return fullText.substring(startPos, endIdx === -1 ? fullText.length : endIdx).trim();
+  };
+
   const handleMapGeneration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject || !grade || !competencies || !topics || !contentStandard || !performanceStandard) {
@@ -43,61 +54,35 @@ export default function Home() {
       let done = false;
       let textBuffer = '';
 
+      // Stream chunks into our buffer text container natively
       while (!done) {
         const { value, done: readingDone } = await reader.read();
         done = readingDone;
         if (value) {
           textBuffer += decoder.decode(value, { stream: !done });
+          
+          // Real-time parsing so the grid boxes fill up progressively while the user watches
+          setMapData({
+            acqComp: parseTagBlock(textBuffer, '===ACQ_COMP===', '===ACQ_ASST==='),
+            acqAsst: parseTagBlock(textBuffer, '===ACQ_ASST===', '===ACQ_ACT==='),
+            acqAct: parseTagBlock(textBuffer, '===ACQ_ACT===', '===ACQ_RES==='),
+            acqRes: parseTagBlock(textBuffer, '===ACQ_RES===', '===MM_COMP==='),
+            mmComp: parseTagBlock(textBuffer, '===MM_COMP===', '===MM_ASST==='),
+            mmAsst: parseTagBlock(textBuffer, '===MM_ASST===', '===MM_ACT==='),
+            mmAct: parseTagBlock(textBuffer, '===MM_ACT===', '===MM_RES==='),
+            mmRes: parseTagBlock(textBuffer, '===MM_RES===', '===TRANS_COMP==='),
+            transComp: parseTagBlock(textBuffer, '===TRANS_COMP===', '===TRANS_ASST==='),
+            transAsst: parseTagBlock(textBuffer, '===TRANS_ASST===', '===TRANS_ACT==='),
+            transAct: parseTagBlock(textBuffer, '===TRANS_ACT===', '===TRANS_RES==='),
+            transRes: parseTagBlock(textBuffer, '===TRANS_RES===', '')
+          });
+          setHasGenerated(true);
         }
       }
-
-      // 1. Remove markdown code block flags if present
-      let cleanJsonText = textBuffer
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .trim();
-
-      // 2. Escape raw control character linebreaks that break string values inside JSON
-      cleanJsonText = cleanJsonText.replace(/\n/g, "\\n").replace(/\r/g, "\\r");
-      
-      // 3. Fix potential edge case accidental double escaping from the regex step
-      cleanJsonText = cleanJsonText.replace(/\\n\\n/g, "\\n").replace(/(?<="[^"]*)\\n(?=[^"]*")/g, " ");
-
-      // Try extraction parsing safely
-      let parsed;
-      try {
-        parsed = JSON.parse(cleanJsonText);
-      } catch (jsonErr) {
-        // Fallback recovery if there's an aggressive hanging bracket issue
-        const openingBrace = cleanJsonText.indexOf('{');
-        const closingBrace = cleanJsonText.lastIndexOf('}');
-        if (openingBrace !== -1 && closingBrace !== -1) {
-          parsed = JSON.parse(cleanJsonText.substring(openingBrace, closingBrace + 1));
-        } else {
-          throw jsonErr;
-        }
-      }
-      
-      setMapData({
-        acqComp: parsed.acqComp?.replace(/\\n/g, '\n') || '',
-        acqAsst: parsed.acqAsst?.replace(/\\n/g, '\n') || '',
-        acqAct: parsed.acqAct?.replace(/\\n/g, '\n') || '',
-        acqRes: parsed.acqRes?.replace(/\\n/g, '\n') || '',
-        mmComp: parsed.mmComp?.replace(/\\n/g, '\n') || '',
-        mmAsst: parsed.mmAsst?.replace(/\\n/g, '\n') || '',
-        mmAct: parsed.mmAct?.replace(/\\n/g, '\n') || '',
-        mmRes: parsed.mmRes?.replace(/\\n/g, '\n') || '',
-        transComp: parsed.transComp?.replace(/\\n/g, '\n') || '',
-        transAsst: parsed.transAsst?.replace(/\\n/g, '\n') || '',
-        transAct: parsed.transAct?.replace(/\\n/g, '\n') || '',
-        transRes: parsed.transRes?.replace(/\\n/g, '\n') || ''
-      });
-      
-      setHasGenerated(true);
 
     } catch (error) {
-      console.error("Parsing mapping error:", error);
-      alert("Encountered formatting mismatch. Please click generate again to re-sync structural blocks.");
+      console.error("Mapping engine pipeline error:", error);
+      alert("Failed to build curriculum mapping data seamlessly.");
     } finally {
       setLoading(false);
     }
@@ -118,11 +103,11 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Subject</label>
-                <input type="text" placeholder="e.g., Mathematics" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={subject} onChange={e => setSubject(e.target.value)} />
+                <input type="text" placeholder="e.g., MATHEMATICS" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none font-bold" value={subject} onChange={e => setSubject(e.target.value)} />
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Grade Level</label>
-                <input type="text" placeholder="e.g., Grade 10" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={grade} onChange={e => setGrade(e.target.value)} />
+                <input type="text" placeholder="e.g., 10" className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none font-bold" value={grade} onChange={e => setGrade(e.target.value)} />
               </div>
             </div>
 
@@ -144,7 +129,7 @@ export default function Home() {
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 uppercase mb-1">Topic / Quarter</label>
-                <textarea rows={4} placeholder="e.g., Measurement and Geometry..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={topics} onChange={e => setTopics(e.target.value)} />
+                <textarea rows={4} placeholder="e.g., First Quarter - Trigonometry..." className="w-full border border-slate-300 p-2 rounded text-xs bg-white outline-none" value={topics} onChange={e => setTopics(e.target.value)} />
               </div>
             </div>
 

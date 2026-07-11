@@ -30,21 +30,43 @@ export async function POST(request: Request) {
       2. For each category block, generate targeted Assessments, Activities, and Resources.
       3. Weave the institutional core values into the activities.
       
-      CRITICAL FORMATTING RULE: You must output your entire response as a single, valid JSON object matching the exact structure below. Do not wrap it in markdown block quotes. Use a clean string format where list items are separated by a space or a semicolon, NOT a raw multi-line linebreak, so JSON.parse does not break.
-      {
-        "acqComp": "classified acquisition competencies",
-        "acqAsst": "assessments for acquisition",
-        "acqAct": "activities for acquisition",
-        "acqRes": "resources for acquisition",
-        "mmComp": "classified make meaning competencies",
-        "mmAsst": "assessments for make meaning",
-        "mmAct": "activities for make meaning",
-        "mmRes": "resources for make meaning",
-        "transComp": "classified transfer competencies",
-        "transAsst": "assessments for transfer",
-        "transAct": "activities for transfer",
-        "transRes": "resources for transfer"
-      }`,
+      CRITICAL FORMATTING RULE: You must output your response as plain text using the exact headers below. Do not wrap the text in markdown code blocks, and do not use JSON. Just write the marker name and put the content directly under it.
+
+      ===ACQ_COMP===
+      (List categorized acquisition competencies here)
+
+      ===ACQ_ASST===
+      (List assessments for acquisition here)
+
+      ===ACQ_ACT===
+      (List activities for acquisition here)
+
+      ===ACQ_RES===
+      (List resources for acquisition here)
+
+      ===MM_COMP===
+      (List categorized make meaning competencies here)
+
+      ===MM_ASST===
+      (List assessments for make meaning here)
+
+      ===MM_ACT===
+      (List activities for make meaning here)
+
+      ===MM_RES===
+      (List resources for make meaning here)
+
+      ===TRANS_COMP===
+      (List categorized transfer competencies here)
+
+      ===TRANS_ASST===
+      (List assessments for transfer here)
+
+      ===TRANS_ACT===
+      (List activities for transfer here)
+
+      ===TRANS_RES===
+      (List resources for transfer here)`,
     });
 
     const stream = new ReadableStream({
